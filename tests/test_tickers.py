@@ -60,3 +60,17 @@ def test_universe_csv_parsing(monkeypatch):
     rows = universe._fetch_csv_rows()
     assert rows[0] == {"symbol": "NEWCO", "name": "New Company Limited", "aliases": [], "series": "EQ", "listed": "2026-10-28"}
     assert rows[1]["symbol"] == "SMALLCO" and rows[1]["series"] == "SME"
+
+
+def test_universe_direct_fallback_and_diagnostics(monkeypatch):
+    import pandas as pd
+    import nsemine.nse as nse
+    from app.market import universe
+
+    monkeypatch.setattr(nse, "get_all_equities_list", lambda: None)          # session path fails
+    monkeypatch.setattr(nse, "get_all_sme_stocks_list", lambda: None)
+    monkeypatch.setattr(universe, "_direct_csv", lambda series: pd.DataFrame(
+        {"SYMBOL": ["SOUTHBANK"], "NAME OF COMPANY": ["SOUTH INDIAN BANK LIMITED"], " DATE OF LISTING": ["03-Jan-2000"]}) if series == "EQ" else pd.DataFrame())
+    rows = universe._fetch_csv_rows()
+    assert rows and rows[0]["symbol"] == "SOUTHBANK" and rows[0]["name"] == "South Indian Bank Limited"
+    assert any(a.get("via") == "direct" and a.get("rows") == 1 for a in universe.diagnostics()["attempts"])

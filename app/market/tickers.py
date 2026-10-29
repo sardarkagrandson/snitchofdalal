@@ -205,7 +205,7 @@ def suggest(query: str, limit: int = 8, market: str = DEFAULT_MARKET) -> list[di
                 consider(row, 70)
             elif nq in nt:
                 consider(row, 60)
-            elif len(nq) >= 4 and idx < 400 and nt[:2] == nq[:2]:
+            elif len(nq) >= 4 and nt[:2] == nq[:2] and abs(len(nt) - len(nq)) <= 12:
                 r = difflib.SequenceMatcher(None, nq, nt).ratio()
                 if r >= 0.6:
                     consider(row, 40 * r)

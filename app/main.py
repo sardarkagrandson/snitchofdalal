@@ -510,6 +510,14 @@ def api_chart(request: Request, symbol: str, range: str = "1y", start: date | No
         raise HTTPException(502, f"Chart data unavailable: {exc}")
 
 
+@app.get("/api/search/diagnostics")
+def api_search_diagnostics(reload: bool = True):
+    """State of the live NSE equity list behind search; reload=true refetches now."""
+    from app.market import universe
+
+    return universe.diagnostics(reload=reload and not get_settings().offline_mode)
+
+
 @app.get("/api/suggest")
 def api_suggest(request: Request, q: str = "", limit: int = 8, market: str | None = None):
     return suggest(q, limit=max(1, min(limit, 20)), market=market or active_market(request))
