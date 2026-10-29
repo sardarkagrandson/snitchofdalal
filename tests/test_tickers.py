@@ -26,3 +26,37 @@ def test_fallback_and_exchange():
     assert resolve_ticker("TCS.BO", allow_search=False).exchange == "BSE"
     with pytest.raises(ValueError):
         resolve_ticker("   ")
+
+
+def test_live_universe_merges_into_search(monkeypatch):
+    from app.market import universe
+    from app.market.tickers import suggest
+
+    universe.set_rows_for_tests([
+        {"symbol": "TONBO", "name": "Tonbo Imaging India Limited", "aliases": [], "series": "EQ", "listed": "2026-10-22"},
+        {"symbol": "ZETWERK", "name": "Zetwerk Manufacturing Businesses Limited", "aliases": [], "series": "EQ", "listed": "2026-10-22"},
+    ])
+    try:
+        r = resolve_ticker("Tonbo Imaging", allow_search=False)
+        assert r.symbol == "TONBO.NS" and r.method == "alias" and r.name.startswith("Tonbo")
+        assert resolve_ticker("zetwerk", allow_search=False).symbol == "ZETWERK.NS"
+        assert suggest("ton")[0]["base_symbol"] == "TONBO"
+        # bundled names still win ties and keep their aliases
+        assert resolve_ticker("Tata Motors", allow_search=False).symbol == "TATAMOTORS.NS"
+    finally:
+        universe.set_rows_for_tests([])
+
+
+def test_universe_csv_parsing(monkeypatch):
+    import pandas as pd
+    from app.market import universe
+
+    eq = pd.DataFrame({"symbol": ["NEWCO"], "name": ["NEW COMPANY LIMITED"], "series": ["EQ"],
+                       "date_of_listing": [pd.Timestamp("2026-10-28")]})
+    sme = pd.DataFrame({"SYMBOL": ["SMALLCO"], "NAME OF COMPANY": ["SMALL CO LTD"], " DATE OF LISTING": ["01-Oct-2026"]})
+    import nsemine.nse as nse
+    monkeypatch.setattr(nse, "get_all_equities_list", lambda: eq)
+    monkeypatch.setattr(nse, "get_all_sme_stocks_list", lambda: sme)
+    rows = universe._fetch_csv_rows()
+    assert rows[0] == {"symbol": "NEWCO", "name": "New Company Limited", "aliases": [], "series": "EQ", "listed": "2026-10-28"}
+    assert rows[1]["symbol"] == "SMALLCO" and rows[1]["series"] == "SME"

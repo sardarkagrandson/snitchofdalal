@@ -60,6 +60,12 @@ ASSET_VERSION = _asset_version()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    try:
+        from app.market import universe
+
+        universe.ensure_loaded()   # background fetch of NSE's full equity list
+    except Exception as exc:
+        log.debug("universe warm-up skipped: %s", exc)
     if os.environ.get("SNITCH_NO_SCHEDULER") != "1":
         try:
             sched.start_scheduler()

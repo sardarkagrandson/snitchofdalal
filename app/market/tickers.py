@@ -45,17 +45,35 @@ def _load_symbols(market_id: str = DEFAULT_MARKET) -> list[dict]:
         return json.load(fh)
 
 
-@lru_cache
-def _index(market_id: str = DEFAULT_MARKET) -> tuple[dict[str, dict], dict[str, dict]]:
-    """Return (by_symbol, by_normalized_name_or_alias) for one market."""
+def _all_rows(market_id: str = DEFAULT_MARKET) -> list[dict]:
+    """Bundled names first (they carry aliases and rank as popular), then the live exchange list."""
+    bundled = _load_symbols(market_id)
+    if market_id != "IN":
+        return list(bundled)
+    from app.market import universe
+
+    seen = {r["symbol"].upper() for r in bundled}
+    extra = [r for r in universe.rows() if r["symbol"].upper() not in seen]
+    return list(bundled) + extra
+
+
+@lru_cache(maxsize=16)
+def _index_cached(market_id: str, _version: int) -> tuple[dict[str, dict], dict[str, dict]]:
     by_symbol: dict[str, dict] = {}
     by_text: dict[str, dict] = {}
-    for row in _load_symbols(market_id):
-        by_symbol[row["symbol"].upper()] = row
-        by_text[_norm(row["name"])] = row
+    for row in _all_rows(market_id):
+        by_symbol.setdefault(row["symbol"].upper(), row)
+        by_text.setdefault(_norm(row["name"]), row)
         for alias in row.get("aliases", []):
-            by_text[_norm(alias)] = row
+            by_text.setdefault(_norm(alias), row)
     return by_symbol, by_text
+
+
+def _index(market_id: str = DEFAULT_MARKET) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Return (by_symbol, by_normalized_name_or_alias); rebuilt whenever the live list refreshes."""
+    from app.market import universe
+
+    return _index_cached(market_id, universe.version() if market_id == "IN" else 0)
 
 
 def known_symbols(market_id: str = DEFAULT_MARKET) -> list[dict]:
@@ -101,10 +119,11 @@ def resolve_ticker(query: str, allow_search: bool = True, market: str = DEFAULT_
             return ResolvedTicker(q, f"{row['symbol']}{sfx}", row["symbol"], row["name"], _exchange_for(sfx), 0.98, "alias", mid)
 
     # 4. Fuzzy name / alias match, in market order
+    first = nq.split()[0] if nq else ""
     for mid in order:
         _, by_text = _index(mid)
         sfx = get_market(mid).default_suffix
-        candidates = list(by_text.keys())
+        candidates = [t for t in by_text if t.startswith(first[:3])] if len(by_text) > 400 else list(by_text.keys())
         matches = difflib.get_close_matches(nq, candidates, n=1, cutoff=0.72)
         if not matches:
             for text, row in by_text.items():  # token containment, e.g. "tata motors share"
@@ -166,7 +185,7 @@ def suggest(query: str, limit: int = 8, market: str = DEFAULT_MARKET) -> list[di
         if cur is None or score > cur[0]:
             scored[row["symbol"]] = (score, row)
 
-    for idx, row in enumerate(_load_symbols(m.id)):
+    for idx, row in enumerate(_all_rows(m.id)):
         sym = row["symbol"]
         texts = [row["name"], *row.get("aliases", [])]
         row = {**row, "_rank": idx}
@@ -186,7 +205,7 @@ def suggest(query: str, limit: int = 8, market: str = DEFAULT_MARKET) -> list[di
                 consider(row, 70)
             elif nq in nt:
                 consider(row, 60)
-            elif len(nq) >= 4:
+            elif len(nq) >= 4 and idx < 400 and nt[:2] == nq[:2]:
                 r = difflib.SequenceMatcher(None, nq, nt).ratio()
                 if r >= 0.6:
                     consider(row, 40 * r)

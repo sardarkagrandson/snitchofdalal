@@ -32,7 +32,7 @@ that currency. Adding a market is a new profile in `app/markets.py` plus a symbo
 
 | Module | What it does |
 |---|---|
-| Ticker resolution | Accepts names or symbols (`Tata Motors`, `TATAMOTORS.NS`, `RELIANCE.BO`). Bundled map of ~175 NSE companies with aliases + fuzzy matching, Yahoo search fallback. Every search box offers type-ahead suggestions (`/api/suggest`). |
+| Ticker resolution | Accepts names or symbols (`Tata Motors`, `TATAMOTORS.NS`, `RELIANCE.BO`, `SOL.JO`). Bundled maps of well-known NSE and JSE names with aliases, merged daily with NSE's full equity and SME lists so new listings are searchable the day they list; fuzzy matching and Yahoo search fallback. Every search box offers type-ahead suggestions (`/api/suggest`). |
 | Market data engine | Official NSE quote (via `nsemine`) during market hours with `yfinance` as fallback and for history; LTP, previous close, day range, 52-week range, volume. Session-aware status (pre-open, open, post-close, closed), NSE holiday list fetched daily, next-open countdown. In-memory TTL cache. |
 | Device licensing | Optional. Ed25519-signed licence keys bound to a per-installation Device ID, verified offline. Unlicensed devices only see the activation screen. |
 | Technicals | 14-day RSI (Wilder), 20/50/200 EMA, 20-day ATR (Wilder), annualised volatility, plus labelled setups / breakdowns. Computed natively with pandas. |
