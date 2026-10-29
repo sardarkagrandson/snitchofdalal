@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: float = 25.0
 
     quote_cache_seconds: int = 60
+    # Refresh cadence of the live price on an open stock page during market hours
+    live_quote_seconds: int = 5
     history_cache_seconds: int = 900
     news_cache_seconds: int = 1800
 

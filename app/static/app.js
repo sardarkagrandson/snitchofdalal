@@ -279,6 +279,23 @@ document.querySelectorAll("[data-copy]").forEach(function (btn) {
   }
   btns.forEach(function (b) { b.addEventListener("click", function () { load(b.getAttribute("data-range")); }); });
   customForm.addEventListener("submit", function (ev) { ev.preventDefault(); load("custom", customForm.start.value, customForm.end.value); });
+  // Hooks for the live quote poller: push a fresh last price into a daily chart, or refetch an intraday one.
+  var currentRange = null;
+  var origLoad = load;
+  load = function (range, start, end) { currentRange = range; return origLoad(range, start, end); };
+  window.sodChart = {
+    isIntraday: function () { return state.intraday; },
+    refresh: function () { if (currentRange && currentRange !== "custom") origLoad(currentRange); },
+    setLast: function (price, ts) {
+      if (!state.points.length || state.intraday) return;
+      var last = state.points[state.points.length - 1];
+      var sameDay = new Date(last[0]).toDateString() === new Date(ts).toDateString();
+      if (sameDay) { last[1] = price; } else { state.points.push([ts, price]); }
+      var ys = state.points.map(function (p) { return p[1]; });
+      draw({ points: state.points, intraday: false, change: ys[ys.length - 1] - ys[0], change_pct: (ys[ys.length - 1] / ys[0] - 1) * 100,
+             high: Math.max.apply(null, ys), low: Math.min.apply(null, ys) });
+    }
+  };
   var saved = null; try { saved = localStorage.getItem("sod-chart-range:" + (card.getAttribute("data-chart-url") ? "mf" : "stock")); } catch (e) {}
   var allowed = Array.prototype.map.call(btns, function (b) { return b.getAttribute("data-range"); });
   load(saved && saved !== "custom" && allowed.indexOf(saved) >= 0 ? saved : defaultRange);
@@ -293,4 +310,53 @@ document.querySelectorAll("[data-copy]").forEach(function (btn) {
   var hide = document.getElementById("mf-guide-hide"), show = document.getElementById("mf-guide-show");
   if (hide) hide.addEventListener("click", function () { setSeen(true); });
   if (show) show.addEventListener("click", function () { setSeen(false); guide.scrollIntoView({ behavior: "smooth" }); });
+})();
+
+// ---- Live quote on the stock page ----------------------------------------------
+(function () {
+  var box = document.getElementById("live-quote");
+  if (!box) return;
+  var symbol = box.getAttribute("data-symbol"), cur = box.getAttribute("data-currency") || "₹";
+  var priceEl = document.getElementById("live-price"), changeEl = document.getElementById("live-change");
+  var asofEl = document.getElementById("live-asof"), srcEl = document.getElementById("live-source"), badge = document.getElementById("live-badge");
+  var lowEl = document.getElementById("live-day-low"), highEl = document.getElementById("live-day-high"), marker = document.getElementById("live-day-marker");
+  var volEl = document.getElementById("live-volume");
+  var lastPrice = null, timer = null, stopped = false;
+  function fmt(v, d) { return v.toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+  function signed(v, suffix, d) {
+    var cls = v > 0 ? "text-mint-600" : v < 0 ? "text-crimson-600" : "";
+    return '<span class="num ' + cls + '">' + (v > 0 ? "+" : "") + fmt(v, d) + (suffix || "") + "</span>";
+  }
+  function apply(q) {
+    if (lastPrice !== null && q.ltp !== lastPrice) {
+      priceEl.classList.remove("flash-up", "flash-down");
+      void priceEl.offsetWidth;
+      priceEl.classList.add(q.ltp > lastPrice ? "flash-up" : "flash-down");
+      setTimeout(function () { priceEl.classList.remove("flash-up", "flash-down"); }, 900);
+    }
+    lastPrice = q.ltp;
+    priceEl.textContent = cur + fmt(q.ltp, 2);
+    changeEl.innerHTML = signed(q.change, "", 2) + ' <span class="text-ink-500">(</span>' + signed(q.change_pct, "%", 2) + '<span class="text-ink-500">)</span>';
+    if (q.as_of) asofEl.textContent = q.as_of.slice(0, 16).replace("T", " ");
+    if (srcEl) srcEl.textContent = q.source;
+    if (lowEl && q.day_low != null) lowEl.textContent = fmt(q.day_low, 2);
+    if (highEl && q.day_high != null) highEl.textContent = fmt(q.day_high, 2);
+    if (marker && q.day_low != null && q.day_high != null && q.day_high > q.day_low) {
+      marker.style.left = Math.max(0, Math.min(100, (q.ltp - q.day_low) / (q.day_high - q.day_low) * 100)).toFixed(1) + "%";
+    }
+    if (volEl && q.volume != null) volEl.textContent = fmt(q.volume, 0);
+    badge.classList.toggle("hidden", !q.market_open);
+    if (window.sodChart) {
+      if (window.sodChart.isIntraday()) { if (q.market_open) window.sodChart.refresh(); }
+      else if (q.market_open) window.sodChart.setLast(q.ltp, Date.parse(q.as_of) || Date.now());
+    }
+  }
+  function tick() {
+    if (stopped || document.hidden) { timer = setTimeout(tick, 5000); return; }
+    fetch("/api/quote/" + encodeURIComponent(symbol)).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (q) { var wait = 15000; if (q) { apply(q); wait = q.next_poll_ms || 15000; } timer = setTimeout(tick, wait); })
+      .catch(function () { timer = setTimeout(tick, 20000); });
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { clearTimeout(timer); tick(); } });
+  timer = setTimeout(tick, box.getAttribute("data-open") === "true" ? 3000 : 60000);
 })();

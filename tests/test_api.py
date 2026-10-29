@@ -108,3 +108,12 @@ def test_smtp_blocked_port_message(monkeypatch):
     monkeypatch.setattr(em, "_open_ipv4_socket", no_route)
     ok, detail = asyncio.run(em.send_html_email("a@b.co", "s", "<p>x</p>"))
     assert not ok and "blocking port 587" in detail and "465" in detail
+
+
+def test_live_quote_endpoint(client):
+    d = client.get("/api/quote/TCS").json()
+    assert d["symbol"] == "TCS.NS" and d["ltp"] > 0 and "next_poll_ms" in d and d["next_poll_ms"] >= 2000
+    assert d["currency_symbol"] == "₹" and "server_time" in d
+    assert client.get("/api/quote/Sasol").json()["currency"] == "ZAR"
+    html = client.get("/stock/TCS").text
+    assert 'id="live-quote"' in html and 'id="live-price"' in html and 'id="live-day-marker"' in html

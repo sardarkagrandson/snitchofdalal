@@ -319,7 +319,9 @@ class MarketDataEngine:
     def history(self, symbol: str, period: str = "1y", interval: str = "1d",
                 start: datetime | None = None, end: datetime | None = None) -> pd.DataFrame:
         key = f"hist:{self.provider.name}:{symbol}:{period}:{interval}:{start.date() if start else ''}:{end.date() if end else ''}"
-        ttl = get_settings().quote_cache_seconds if interval != "1d" else get_settings().history_cache_seconds
+        settings = get_settings()
+        ttl = settings.history_cache_seconds if interval == "1d" else (
+            settings.live_quote_seconds if is_market_open(market=market_for_symbol(symbol)) else settings.quote_cache_seconds)
         cached = _cache.get(key, ttl)
         if cached is not None:
             return cached
@@ -327,9 +329,13 @@ class MarketDataEngine:
         _cache.set(key, df)
         return df
 
-    def quote(self, symbol: str) -> Quote:
+    def quote(self, symbol: str, max_age: float | None = None) -> Quote:
         key = f"quote:{self.provider.name}:{symbol}"
-        ttl = get_settings().quote_cache_seconds if is_market_open(market=market_for_symbol(symbol)) else get_settings().history_cache_seconds
+        settings = get_settings()
+        open_now = is_market_open(market=market_for_symbol(symbol))
+        ttl = settings.quote_cache_seconds if open_now else settings.history_cache_seconds
+        if max_age is not None and open_now:
+            ttl = min(ttl, max_age)
         cached = _cache.get(key, ttl)
         if cached is not None:
             return cached

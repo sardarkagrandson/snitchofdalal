@@ -14,13 +14,14 @@
         {{ m.pill(a.ticker.exchange, "indigo") }}
         {% if a.ticker.confidence < 0.9 %}{{ m.pill("Matched via " ~ a.ticker.method ~ " (" ~ (a.ticker.confidence * 100) | round | int ~ "%)", "warning") }}{% endif %}
       </div>
-      <div class="mt-4 flex flex-wrap items-end gap-x-4 gap-y-1">
-        <span class="hero-num text-ink-900 dark:text-white">{{ q.currency_symbol }}{{ "{:,.2f}".format(q.ltp) }}</span>
-        <span class="text-lg">{{ m.signed(q.change) }} <span class="text-ink-500">(</span>{{ m.signed(q.change_pct, "%") }}<span class="text-ink-500">)</span></span>
+      <div class="mt-4 flex flex-wrap items-end gap-x-4 gap-y-1" id="live-quote" data-symbol="{{ a.ticker.symbol }}" data-currency="{{ q.currency_symbol }}" data-open="{{ 'true' if q.market_open else 'false' }}">
+        <span class="hero-num text-ink-900 dark:text-white live-price" id="live-price">{{ q.currency_symbol }}{{ "{:,.2f}".format(q.ltp) }}</span>
+        <span class="text-lg" id="live-change">{{ m.signed(q.change) }} <span class="text-ink-500">(</span>{{ m.signed(q.change_pct, "%") }}<span class="text-ink-500">)</span></span>
       </div>
-      <p class="mt-1 text-xs text-ink-500">
+      <p class="mt-1 text-xs text-ink-500 flex flex-wrap items-center gap-x-2">
+        <span id="live-badge" class="inline-flex items-center gap-1.5 {% if q.market_open %}text-mint-600{% else %}hidden{% endif %}"><span class="live-dot"></span>Live, refreshes every few seconds</span>
         {% if q.is_stale %}<span class="text-amber-600 dark:text-amber-400 font-medium">Previous-session close</span> &middot; {% endif %}
-        as of {{ q.as_of[:16] | replace("T", " ") }} &middot; source: {{ q.source }} &middot; {{ a.market.label }}
+        <span>as of <span id="live-asof">{{ q.as_of[:16] | replace("T", " ") }}</span> &middot; source: <span id="live-source">{{ q.source }}</span> &middot; {{ a.market.label }}</span>
       </p>
       <div class="mt-4 flex flex-wrap gap-2">
         <a href="/spotlight?q={{ a.ticker.symbol }}" class="btn-primary">Add to Spotlight</a>
@@ -74,9 +75,9 @@
   {{ m.stat("Previous close", m.money(q.previous_close, 2, q.currency_symbol), "", "Open " ~ ("{:,.2f}".format(q.open) if q.open else "-")) }}
   <div class="card p-4">
     <p class="text-xs text-ink-500 mb-1">Day range</p>
-    <div class="text-sm font-semibold text-ink-900 dark:text-white flex justify-between"><span class="num">{{ "{:,.2f}".format(q.day_low or 0) }}</span><span class="num">{{ "{:,.2f}".format(q.day_high or 0) }}</span></div>
+    <div class="text-sm font-semibold text-ink-900 dark:text-white flex justify-between"><span class="num" id="live-day-low">{{ "{:,.2f}".format(q.day_low or 0) }}</span><span class="num" id="live-day-high">{{ "{:,.2f}".format(q.day_high or 0) }}</span></div>
     {% set lo, hi = q.day_low or q.ltp, q.day_high or q.ltp %}
-    <div class="range mt-2"><i style="left: {{ (((q.ltp - lo) / (hi - lo)) * 100) | round(1) if hi > lo else 50 }}%"></i></div>
+    <div class="range mt-2"><i id="live-day-marker" style="left: {{ (((q.ltp - lo) / (hi - lo)) * 100) | round(1) if hi > lo else 50 }}%"></i></div>
   </div>
   <div class="card p-4">
     <p class="text-xs text-ink-500 mb-1">52-week range</p>
@@ -84,7 +85,7 @@
     {% set lo, hi = q.week52_low or q.ltp, q.week52_high or q.ltp %}
     <div class="range mt-2"><i style="left: {{ (((q.ltp - lo) / (hi - lo)) * 100) | round(1) if hi > lo else 50 }}%"></i></div>
   </div>
-  {{ m.stat("Volume", '<span class="num">' ~ ("{:,.0f}".format(q.volume) if q.volume else "-") ~ '</span>', "", "shares, last session") }}
+  {{ m.stat("Volume", '<span class="num" id="live-volume">' ~ ("{:,.0f}".format(q.volume) if q.volume else "-") ~ '</span>', "", "shares, this session") }}
 </section>
 
 <!-- Technicals + Sentiment -->

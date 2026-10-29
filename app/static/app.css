@@ -83,3 +83,10 @@ html.dark .chart-tip { background: #fff; color: #1E222D; }
 html.mf-guide-seen #mf-guide { display: none; }
 #mf-guide-show { display: none; }
 html.mf-guide-seen #mf-guide-show { display: inline-flex; }
+
+/* Live quote */
+.live-dot { width: 7px; height: 7px; border-radius: 9999px; background: var(--mint); display: inline-block; animation: live-pulse 1.6s ease-in-out infinite; }
+@keyframes live-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+.live-price { transition: color .25s ease; }
+.live-price.flash-up { color: #00B386 !important; }
+.live-price.flash-down { color: #D64545 !important; }

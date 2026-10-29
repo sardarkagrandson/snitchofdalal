@@ -488,6 +488,30 @@ def api_health():
             "market": market_status(), "scheduler_running": sched.get_scheduler().running}
 
 
+@app.get("/api/quote/{symbol}")
+def api_quote(request: Request, symbol: str):
+    """Lightweight live quote for in-page refresh; tells the client how soon to ask again."""
+    from datetime import datetime as _dt, timezone as _tz
+    from app.market.data import get_engine
+
+    try:
+        sym = resolve_ticker(symbol, market=active_market(request)).symbol
+        q = get_engine().quote(sym, max_age=get_settings().live_quote_seconds)
+    except Exception as exc:
+        raise HTTPException(502, f"Quote unavailable: {exc}")
+    s = get_settings()
+    if not q.market_open:
+        next_ms = 60_000
+    elif q.source == "nse" or s.offline_mode:
+        next_ms = max(2, s.live_quote_seconds) * 1000
+    else:
+        next_ms = max(10, s.live_quote_seconds) * 1000   # Yahoo: be gentle, it is delayed anyway
+    d = q.as_dict()
+    d["server_time"] = _dt.now(_tz.utc).isoformat()
+    d["next_poll_ms"] = next_ms
+    return d
+
+
 @app.get("/api/chart/{symbol}")
 def api_chart(request: Request, symbol: str, range: str = "1y", start: date | None = None, end: date | None = None):
     from datetime import datetime as _dt, time as _time
