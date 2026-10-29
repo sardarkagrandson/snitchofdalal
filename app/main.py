@@ -503,7 +503,7 @@ def api_quote(request: Request, symbol: str):
     if not q.market_open:
         next_ms = 60_000
     elif q.source == "nse" or s.offline_mode:
-        next_ms = max(2, s.live_quote_seconds) * 1000
+        next_ms = max(1, s.live_quote_seconds) * 1000
     else:
         next_ms = max(10, s.live_quote_seconds) * 1000   # Yahoo: be gentle, it is delayed anyway
     d = q.as_dict()

@@ -19,7 +19,8 @@
         <span class="text-lg" id="live-change">{{ m.signed(q.change) }} <span class="text-ink-500">(</span>{{ m.signed(q.change_pct, "%") }}<span class="text-ink-500">)</span></span>
       </div>
       <p class="mt-1 text-xs text-ink-500 flex flex-wrap items-center gap-x-2">
-        <span id="live-badge" class="inline-flex items-center gap-1.5 {% if q.market_open %}text-mint-600{% else %}hidden{% endif %}"><span class="live-dot"></span>Live, refreshes every few seconds</span>
+        <span id="live-badge" class="inline-flex items-center gap-1.5 {% if q.market_open %}text-mint-600{% else %}hidden{% endif %}"><span class="live-dot"></span>Live</span>
+        <span id="live-countdown" class="num text-ink-500">{% if q.market_open %}next refresh in 3s{% else %}market closed; next check in 60s{% endif %}</span>
         {% if q.is_stale %}<span class="text-amber-600 dark:text-amber-400 font-medium">Previous-session close</span> &middot; {% endif %}
         <span>as of <span id="live-asof">{{ q.as_of[:16] | replace("T", " ") }}</span> &middot; source: <span id="live-source">{{ q.source }}</span> &middot; {{ a.market.label }}</span>
       </p>

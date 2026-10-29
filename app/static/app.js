@@ -321,7 +321,16 @@ document.querySelectorAll("[data-copy]").forEach(function (btn) {
   var asofEl = document.getElementById("live-asof"), srcEl = document.getElementById("live-source"), badge = document.getElementById("live-badge");
   var lowEl = document.getElementById("live-day-low"), highEl = document.getElementById("live-day-high"), marker = document.getElementById("live-day-marker");
   var volEl = document.getElementById("live-volume");
-  var lastPrice = null, timer = null, stopped = false;
+  var countdownEl = document.getElementById("live-countdown");
+  var lastPrice = null, timer = null, stopped = false, nextAt = 0, marketOpen = box.getAttribute("data-open") === "true";
+  function schedule(wait) { nextAt = Date.now() + wait; timer = setTimeout(tick, wait); }
+  setInterval(function () {
+    if (!countdownEl) return;
+    if (document.hidden) { countdownEl.textContent = "paused (tab in background)"; return; }
+    var left = Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+    if (nextAt === 0 || left === 0) { countdownEl.textContent = "refreshing…"; return; }
+    countdownEl.textContent = marketOpen ? "next refresh in " + left + "s" : "market closed; next check in " + left + "s";
+  }, 250);
   function fmt(v, d) { return v.toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }); }
   function signed(v, suffix, d) {
     var cls = v > 0 ? "text-mint-600" : v < 0 ? "text-crimson-600" : "";
@@ -345,6 +354,7 @@ document.querySelectorAll("[data-copy]").forEach(function (btn) {
       marker.style.left = Math.max(0, Math.min(100, (q.ltp - q.day_low) / (q.day_high - q.day_low) * 100)).toFixed(1) + "%";
     }
     if (volEl && q.volume != null) volEl.textContent = fmt(q.volume, 0);
+    marketOpen = !!q.market_open;
     badge.classList.toggle("hidden", !q.market_open);
     if (window.sodChart) {
       if (window.sodChart.isIntraday()) { if (q.market_open) window.sodChart.refresh(); }
@@ -352,11 +362,12 @@ document.querySelectorAll("[data-copy]").forEach(function (btn) {
     }
   }
   function tick() {
-    if (stopped || document.hidden) { timer = setTimeout(tick, 5000); return; }
+    if (stopped || document.hidden) { schedule(5000); return; }
+    nextAt = 0;
     fetch("/api/quote/" + encodeURIComponent(symbol)).then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (q) { var wait = 15000; if (q) { apply(q); wait = q.next_poll_ms || 15000; } timer = setTimeout(tick, wait); })
-      .catch(function () { timer = setTimeout(tick, 20000); });
+      .then(function (q) { var wait = 15000; if (q) { apply(q); wait = q.next_poll_ms || 15000; } schedule(wait); })
+      .catch(function () { schedule(20000); });
   }
   document.addEventListener("visibilitychange", function () { if (!document.hidden) { clearTimeout(timer); tick(); } });
-  timer = setTimeout(tick, box.getAttribute("data-open") === "true" ? 3000 : 60000);
+  schedule(marketOpen ? 1500 : 60000);
 })();
